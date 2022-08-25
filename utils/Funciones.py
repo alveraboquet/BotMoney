@@ -4,6 +4,11 @@ from time import time
 from binance.helpers import interval_to_milliseconds
 from datetime import datetime
 import numpy as np
+from dataframes.TradesFrame import TradesFrame
+
+from utils.Notificaciones.TelgramBot import TelegramBot
+
+bot=TelegramBot()
 
 def singleton(cls, *args, **kw):
     instances = {}
@@ -55,3 +60,24 @@ def interval_to_second(interval):
     letra = interval[-1:]
     DIT2 = {'m':1, 'h':60, 'd':1440}
     return 60*DIT2[letra]*int(interval[:-1])
+
+def to_timestamp_gtc(dt): 
+    return int((dt - datetime(1970, 1, 1)).total_seconds() * 1000)
+
+def summary(trades : TradesFrame, timer : int):
+    if time() >= timer:
+        texto = 'Resumen:\n'
+        un_pnl_total = 0.0
+        notifica = False
+        for _, trade in trades.iterrows():
+            un_pnl_total += trade.unPNL
+            pnl_total += trade.PNL
+            texto += f'\tS: {trade.symbol_name} - G: {round(100*trade.unPNL, 2)}\n'
+            notifica = True
+        texto += f'Total uPnl: {round(100*un_pnl_total, 2)}\n'
+        texto += f'Total Pnl: {round(100*pnl_total, 2)}'
+        if notifica:
+            bot.notify(texto)
+        timer = time() + (60 - time() % 60)
+    return timer
+    

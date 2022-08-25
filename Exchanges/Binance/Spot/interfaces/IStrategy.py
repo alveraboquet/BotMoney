@@ -1,10 +1,15 @@
 from dataframes.KlinesFrame import KlinesFrame
 from dataframes.SymbolFrame import SymbolFrame
 from dataframes.TradesFrame import TradesFrame, StatusTrade
+from dataframes.OrdersFrame import OrdersFrame, StatusOrder, TypeQty
+from enum import Enum
 import numpy as np
 from utils.Funciones import interval_to_second
 from time import time
 from binance import Client
+
+
+
 class IStrategy:
     '''
     Clase generica de una estrategia de trading
@@ -21,12 +26,14 @@ class IStrategy:
         self.stop = False
         self.interval = config.interval
         self.seconds = interval_to_second(self.interval)
+        self.reset_elapsed_time()
         self.assets = ""
         self.df_symbols : SymbolFrame = self.exchange.get_symbols()
-        self.df_trades : TradesFrame = TradesFrame.create_empty_trades()
-        self.df_trades = self.df_trades.create_trade('BTCBUSD', Client.SIDE_BUY, 10, Client.ORDER_TYPE_MARKET)
-        print(self.df_trades)
-        self.reset_elapsed_time()
+        self.trades : TradesFrame = TradesFrame.create_empty_trades()
+        self.orders : OrdersFrame = OrdersFrame.create_empty_orders()
+
+    def next_row(self, data:KlinesFrame = None):
+        return data
 
     def reset_elapsed_time(self):
         '''Metodo que reinica el tiempo transcurrido'''
@@ -49,27 +56,27 @@ class IStrategy:
         return (time() >= self.elapsed_time)
     
     def apply_signals(self):
-        if self.df_symbols is None: return None
+        if self.df_symbols is None: 
+            return None
         for symbol_name in self.df_symbols.index:
-            self.signals(symbol_name=symbol_name, interval=self.interval, limit=self.config.limit)
+            self.signals(symbol_name=symbol_name, timeframe=self.interval, limit=self.config.limit)
 
-    def entry_long(self, symbol_name, order_type=Client.ORDER_TYPE_MARKET, quantity=np.nan, stop_loss = np.nan, take_profit = np.nan, trailing_stop = np.nan, trailing_profit = np.nan):
-        self.df_trades = self.df_trades.create_trade(symbol_name, Client.SIDE_BUY, quantity, order_type)
+    def entry_long(self, symbol_name, order_type=Client.ORDER_TYPE_MARKET, quantity=np.nan, stop_loss = np.nan, take_profit = np.nan, trailing_stop = np.nan, trailing_profit = np.nan, price=np.nan, type_qty : TypeQty = TypeQty.USD):
+        self.orders = self.orders.create_order(symbol_name, price=price, order_type = order_type, side= Client.SIDE_BUY, quantity=quantity, side=Client.SIDE_BUY, stop_loss=stop_loss, take_profit=take_profit, trailing_stop=trailing_stop, trailing_profit=trailing_profit, type_qty=type_qty)
     
-    def exit_long(self, symbol_name, order_type=Client.ORDER_TYPE_MARKET, quantity=np.nan, stop_loss = np.nan, take_profit = np.nan, trailing_stop = np.nan, trailing_profit = np.nan):
-        self.df_trades = self.df_trades.create_trade(symbol_name, Client.SIDE_SELL, quantity, order_type)
+    def exit_long(self, symbol_name, order_type=Client.ORDER_TYPE_MARKET, quantity=np.nan, stop_loss = np.nan, take_profit = np.nan, trailing_stop = np.nan, trailing_profit = np.nan, price=np.nan, type_qty :TypeQty = TypeQty.USD):
+        self.orders = self.orders.create_order(symbol_name, price=price, order_type = order_type, side= Client.SIDE_SELL, quantity=quantity, side=Client.SIDE_BUY, stop_loss=stop_loss, take_profit=take_profit, trailing_stop=trailing_stop, trailing_profit=trailing_profit, type_qty=type_qty)
 
-    def modify_trailing_stop(self, symbol_name, order_type=Client.ORDER_TYPE_MARKET, quantity=np.nan, stop_loss = np.nan, take_profit = np.nan, trailing_stop = np.nan, trailing_profit = np.nan):
-        self.df_trades = self.df_trades.create_trade(symbol_name, Client.SIDE_SELL, quantity, order_type)
+    def get_orders_for_open(self):
+        return self.orders.get_orders()
 
-    def modify_trailing_profit(self, symbol_name, order_type=Client.ORDER_TYPE_MARKET, quantity=np.nan, stop_loss = np.nan, take_profit = np.nan, trailing_stop = np.nan, trailing_profit = np.nan):
-        self.df_trades = self.df_trades.create_trade(symbol_name, Client.SIDE_SELL, quantity, order_type)
+    def get_orders_for_close(self):
+        return self.orders.get_orders(side=Client.SIDE_SELL)
+    
+    def on_buy(self, order, entry_price, quantity):
+        self.trades = self.trades.set_trade(order.symbol_name, StatusTrade.LONG, quantity, order.stop_loss, order.take_profit, order.trailing_stop, order.trailing_profit, entry_price, exit_price=None)
+        return self.trades.loc[order.symbol_name].copy()
 
-    def get_trades_created_for_buy(self):
-        return self.df_trades.get_trades(status=StatusTrade.CREATED,side=Client.SIDE_BUY)
-
-    def get_trades_send_for_buy(self):
-        return self.df_trades.get_trades(status=StatusTrade.SEND,side=Client.SIDE_BUY)
-
-    def get_trades_send_for_sell(self):
-        return self.df_trades.get_trades(status=StatusTrade.SEND,side=Client.SIDE_SELL)
+    def on_sell(self, order, exit_price, quantity):
+        self.trades = self.trades.set_trade(order.symbol_name, StatusTrade.LONG, quantity, order.stop_loss, order.take_profit, order.trailing_stop, order.trailing_profit, exit_price, exit_price=None)
+        return self.trades.loc[order.symbol_name].copy()        

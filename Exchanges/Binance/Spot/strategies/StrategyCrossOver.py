@@ -1,8 +1,6 @@
 from Exchanges.Binance.Spot.interfaces.IStrategy import IStrategy
 from utils.Constantes import Const
 
-
-
 class StrategyCrossOver(IStrategy):
     def __init__(self):
         pass
@@ -16,6 +14,6 @@ class StrategyCrossOver(IStrategy):
         
     def next_row(self, data):
         '''Metodo que retorna una señal de compra/venta para cada activo'''
-        print(data[current_row].symbol_name)
-        
+        print(data)
+        input('...')
         return data

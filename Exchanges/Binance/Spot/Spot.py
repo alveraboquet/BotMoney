@@ -1,9 +1,10 @@
 from gettext import npgettext
 from binance import Client
 from binance.enums import KLINE_INTERVAL_1MINUTE, SYMBOL_TYPE_SPOT, ORDER_TYPE_MARKET, ORDER_TYPE_LIMIT
-from utils.Funciones import * 
+from utils.Funciones import exception, to_timestamp_gtc
 from binance.enums import *
 from binance.helpers import round_step_size
+from time import sleep
 
 from dataframes.KlinesFrame import KlinesFrame
 
@@ -24,16 +25,16 @@ from os import path
 import numpy as np
 from utils.Logger import Logger
 from decimal import Decimal
+from Exchanges.Binance.Spot.interfaces.IExchange import IExchange
+from datetime import datetime
+from time import time
 
 @singleton
-class Spot():
+class Spot(IExchange):
 
-    __client, __config, __log, __bot = None, Config(), Logger(), TelegramBot()
-    _DEBUG_= __config.is_debug()
     symbols = []
     def __init__(self, args):
-        self.__client = Client(self.__config.getApiKey(), self.__config.getApiSecret())
-        self.asset = args.asset
+        super().__init__(args)
         self.update_data_exchange()
 
     def update_data_exchange(self):
@@ -61,13 +62,13 @@ class Spot():
         data : KlinesFrame = KlinesFrame.init(candels, symbol_name, interval, filter_time=filter_time)
         return data
       
-    def get_balance(self, asset) -> Balance:
+    def get_balance(self, asset):
         '''Obtiene el balance del activo'''
         try:
             info = self.__client.get_account()
             return Balance(info, asset)
         except Exception as excep:
-            exception(excep)
+            exception(self.__log, self.__bot)
         return None
 
     def close_order(self, side, symbol_name, quantity):
